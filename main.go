@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// downloadRequest now includes a Quality field.
 type downloadRequest struct {
 	URL     string `json:"url"`
 	Quality string `json:"quality"` // Accepts "best", "1080p", "720p", "480p"
@@ -26,31 +27,32 @@ func main() {
 	// Set up the HTTP route.
 	http.HandleFunc("/api/download", downloadHandler)
 
-	// Serve the "downloads" folder as static files (optional).
+	// (Optional) Serve the "downloads" folder as static files.
 	fs := http.FileServer(http.Dir("downloads"))
 	http.Handle("/downloads/", http.StripPrefix("/downloads", fs))
 
-	// Use Railway-provided port or fallback to 8080 locally.
+	// Get the port from the environment variable (Railway sets PORT automatically)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Go server running on port %s\n", port)
+	log.Printf("Go server running on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	// ✅ CORS headers
+	// Add CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	// ✅ Handle preflight requests
+	// Handle OPTIONS preflight request
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	// Ensure the method is POST
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -64,7 +66,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Download requested for URL: %s with quality: %s\n", req.URL, req.Quality)
 
-	// Format string based on quality
+	// Choose a format string based on the quality requested.
 	var formatString string
 	switch req.Quality {
 	case "1080p":
@@ -74,9 +76,11 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case "480p":
 		formatString = "bv*[height<=480][vcodec^=avc1]+ba[acodec^=mp4a]/best[ext=mp4]/best"
 	default:
+		// "best" or if unrecognized, simply use the overall best quality.
 		formatString = "bestvideo+bestaudio/best"
 	}
 
+	// Use yt-dlp to download the video.
 	cmd := exec.Command("yt-dlp",
 		"-f", formatString,
 		"--merge-output-format", "mp4",
@@ -91,8 +95,10 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional: short sleep to ensure the file is completely written.
 	time.Sleep(2 * time.Second)
 
+	// Find the newest (most recently modified) file in the downloads folder.
 	downloadedFile, err := findNewestFile("downloads")
 	if err != nil {
 		log.Println("Error finding downloaded file:", err)
@@ -100,13 +106,30 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// (Optional) Post-process via ffmpeg if needed.
+	/*
+		convertedFile := filepath.Join("downloads", "whatsapp_compatible.mp4")
+		ffmpegCmd := exec.Command("ffmpeg", "-i", downloadedFile, "-vcodec", "libx264", "-acodec", "aac", "-strict", "-2", convertedFile)
+		ffmpegOutput, err := ffmpegCmd.CombinedOutput()
+		if err != nil {
+			log.Println("ffmpeg conversion failed:", err, string(ffmpegOutput))
+			http.Error(w, "Video downloaded but failed to convert", http.StatusInternalServerError)
+			return
+		}
+		// Use the converted file.
+		downloadedFile = convertedFile
+	*/
+
+	// Set headers to force file download in the client.
 	filename := filepath.Base(downloadedFile)
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.Header().Set("Content-Type", "application/octet-stream")
 
+	// Serve the file.
 	http.ServeFile(w, r, downloadedFile)
 }
 
+// findNewestFile returns the most recently modified file in the specified folder.
 func findNewestFile(folder string) (string, error) {
 	entries, err := os.ReadDir(folder)
 	if err != nil {
@@ -130,10 +153,8 @@ func findNewestFile(folder string) (string, error) {
 			newestFile = filepath.Join(folder, entry.Name())
 		}
 	}
-
 	if newestFile == "" {
 		return "", fmt.Errorf("no file found in folder %s", folder)
 	}
-
 	return newestFile, nil
 }
