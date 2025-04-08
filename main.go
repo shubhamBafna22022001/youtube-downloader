@@ -31,13 +31,14 @@ func main() {
 	fs := http.FileServer(http.Dir("downloads"))
 	http.Handle("/downloads/", http.StripPrefix("/downloads", fs))
 
-	// Get the port from the environment variable (Railway sets PORT automatically)
+	// Get the port from the environment variable, default to 8080 if not set.
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Go server running on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+
+	log.Printf("Go server running on port %s\n", port)
+	log.Fatal(http.ListenAndServe(":" + port, nil))
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,18 +47,19 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	// Handle OPTIONS preflight request
+	// Handle OPTIONS preflight requests
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// Ensure the method is POST
+	// Only allow POST requests
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Decode the incoming JSON request.
 	var req downloadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
 		http.Error(w, "Invalid JSON or missing 'url' field", http.StatusBadRequest)
@@ -106,7 +108,8 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// (Optional) Post-process via ffmpeg if needed.
+	// (Optional) Post-process via ffmpeg to make it WhatsApp/QuickTime compatible.
+	// Uncomment the following block if you want to force conversion.
 	/*
 		convertedFile := filepath.Join("downloads", "whatsapp_compatible.mp4")
 		ffmpegCmd := exec.Command("ffmpeg", "-i", downloadedFile, "-vcodec", "libx264", "-acodec", "aac", "-strict", "-2", convertedFile)
@@ -116,16 +119,16 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Video downloaded but failed to convert", http.StatusInternalServerError)
 			return
 		}
-		// Use the converted file.
+		// Use the converted file as the file to serve.
 		downloadedFile = convertedFile
 	*/
 
-	// Set headers to force file download in the client.
+	// Set headers to force the browser to download the file.
 	filename := filepath.Base(downloadedFile)
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	// Serve the file.
+	// Stream the file back to the client.
 	http.ServeFile(w, r, downloadedFile)
 }
 
