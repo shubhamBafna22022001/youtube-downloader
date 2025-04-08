@@ -2,8 +2,11 @@
     "build": {
       "builder": "nixpacks"
     },
-    "deploy": {
-      "startCommand": "go run main.go"
-    }
+    
+        "deploy": {
+          "startCommand": "./app"
+        }
+      
+      
   }
   
