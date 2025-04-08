@@ -8,8 +8,10 @@ RUN apk add --no-cache yt-dlp ffmpeg
 WORKDIR /app
 
 # Copy the Go module files and download dependencies.
-COPY go.mod go.sum ./
+# Copy only go.mod for now
+COPY go.mod ./
 RUN go mod download
+
 
 # Copy the rest of your application code.
 COPY . .
