@@ -36,6 +36,18 @@ func main() {
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
+    // ✅ Add CORS headers
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+    // ✅ Handle OPTIONS preflight request
+    if r.Method == http.MethodOptions {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
+    // ✅ Continue with your actual logic
     if r.Method != http.MethodPost {
         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
         return
@@ -48,6 +60,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     log.Printf("Download requested for URL: %s with quality: %s\n", req.URL, req.Quality)
+
 
     // Choose a format string based on the quality requested.
     var formatString string
