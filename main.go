@@ -83,7 +83,10 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use yt-dlp to download the video.
+	// Add browser-mimicking flags: --user-agent and --referer
 	cmd := exec.Command("yt-dlp",
+		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36",
+		"--referer", "https://www.youtube.com/",
 		"-f", formatString,
 		"--merge-output-format", "mp4",
 		"-o", "downloads/%(title)s.%(ext)s",
@@ -108,21 +111,6 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// (Optional) Post-process via ffmpeg to make it WhatsApp/QuickTime compatible.
-	// Uncomment the following block if you want to force conversion.
-	/*
-		convertedFile := filepath.Join("downloads", "whatsapp_compatible.mp4")
-		ffmpegCmd := exec.Command("ffmpeg", "-i", downloadedFile, "-vcodec", "libx264", "-acodec", "aac", "-strict", "-2", convertedFile)
-		ffmpegOutput, err := ffmpegCmd.CombinedOutput()
-		if err != nil {
-			log.Println("ffmpeg conversion failed:", err, string(ffmpegOutput))
-			http.Error(w, "Video downloaded but failed to convert", http.StatusInternalServerError)
-			return
-		}
-		// Use the converted file as the file to serve.
-		downloadedFile = convertedFile
-	*/
-
 	// Set headers to force the browser to download the file.
 	filename := filepath.Base(downloadedFile)
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
@@ -131,6 +119,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	// Stream the file back to the client.
 	http.ServeFile(w, r, downloadedFile)
 }
+
 
 // findNewestFile returns the most recently modified file in the specified folder.
 func findNewestFile(folder string) (string, error) {
